@@ -1,0 +1,116 @@
+Introduction
+The Personal AI-Like Daily Task Management System is a single-user, full-stack web application that acts as a smart productivity assistant. It helps an employee plan daily tasks, track time and progress, detect workload overload, receive intelligent next-task suggestions, and generate automatic end-of-day reports — all using rule-based logic with no external AI APIs.
+
+The system is designed to feel like a futuristic, minimal productivity assistant (inspired by Notion AI + Linear + Apple UX), running fully offline-capable with a light-mode-only UI.
+
+Glossary
+System: The Personal AI-Like Daily Task Management System as a whole.
+Task_Manager: The backend service responsible for storing, retrieving, and updating task records.
+Suggestion_Engine: The rule-based component that determines the next best task for the user to work on.
+Workload_Detector: The rule-based component that calculates daily workload pressure and detects overload conditions.
+Report_Generator: The component that compiles and formats the end-of-day daily summary report.
+Dashboard: The main frontend page displaying today's tasks, suggestions, workload status, and summary preview.
+Task: A unit of work with a name, date, duration, status, priority, client, and technologies.
+Priority: A classification of task urgency — one of low, medium, or high.
+Status: The current state of a task — either pending or completed.
+Overdue Task: A task whose assigned date is before the current date and whose status is pending.
+Productive Hours: The sum of durations of all completed tasks for a given day.
+Workload Threshold: The maximum recommended daily task duration, set at 8 hours.
+Daily Report: An automatically generated summary of completed tasks, pending tasks, time spent, and a smart text summary for a given day.
+Requirements
+Requirement 1: Task Creation
+User Story: As an employee, I want to create a new task with all relevant details, so that I can track my planned work for the day.
+
+Acceptance Criteria
+THE Task_Manager SHALL accept task creation requests containing: taskName, date, duration (in hours), priority, client, technologies, and status (defaulting to pending).
+WHEN a task creation request is received, THE Task_Manager SHALL assign a unique taskId and a createdAt timestamp to the task before persisting it.
+IF a task creation request is missing taskName, date, duration, or priority, THEN THE Task_Manager SHALL return a descriptive validation error with HTTP status 400.
+WHEN a task is successfully created, THE Task_Manager SHALL return the complete task object with HTTP status 201.
+THE Task_Manager SHALL accept duration values as positive numbers representing hours, with a minimum value of 0.25 (15 minutes).
+Requirement 2: Task Retrieval and Listing
+User Story: As an employee, I want to view all my tasks filtered by date or status, so that I can review what I have planned or completed.
+
+Acceptance Criteria
+WHEN a request is made to retrieve tasks for a specific date, THE Task_Manager SHALL return all tasks whose date field matches the requested date.
+WHEN a request is made to retrieve all tasks, THE Task_Manager SHALL return tasks sorted by date descending, then by priority descending (high → medium → low).
+WHEN a request is made to retrieve tasks filtered by status, THE Task_Manager SHALL return only tasks matching the requested status value.
+IF no tasks exist for the requested filter, THEN THE Task_Manager SHALL return an empty array with HTTP status 200.
+Requirement 3: Task Update and Status Management
+User Story: As an employee, I want to update task details and mark tasks as completed, so that I can keep my task list accurate throughout the day.
+
+Acceptance Criteria
+WHEN a task update request is received for an existing taskId, THE Task_Manager SHALL update only the fields provided in the request body and persist the changes.
+WHEN a task's status is updated to completed, THE Task_Manager SHALL record the completion without altering the original createdAt or taskId.
+IF a task update request references a taskId that does not exist, THEN THE Task_Manager SHALL return a descriptive error with HTTP status 404.
+WHEN a task is successfully updated, THE Task_Manager SHALL return the updated task object with HTTP status 200.
+Requirement 4: Task Deletion
+User Story: As an employee, I want to delete tasks I no longer need, so that my task list stays clean and relevant.
+
+Acceptance Criteria
+WHEN a task deletion request is received for an existing taskId, THE Task_Manager SHALL permanently remove the task and return HTTP status 200 with a confirmation message.
+IF a task deletion request references a taskId that does not exist, THEN THE Task_Manager SHALL return a descriptive error with HTTP status 404.
+Requirement 5: Next Best Task Suggestion Engine
+User Story: As an employee, I want the system to suggest the most important task I should work on next, so that I can stay focused without manually prioritizing.
+
+Acceptance Criteria
+WHEN the Suggestion_Engine is invoked for a given date, THE Suggestion_Engine SHALL evaluate all pending tasks for that date and return the single highest-priority task according to the rule-based scoring logic.
+THE Suggestion_Engine SHALL apply the following priority scoring rules in order:
+Overdue tasks (date before today) receive the highest score.
+Among non-overdue tasks, high priority tasks score higher than medium, which score higher than low.
+Among tasks with equal priority, tasks with shorter duration score higher.
+Among tasks with equal priority and duration, tasks with an earlier createdAt timestamp score higher.
+WHEN the Suggestion_Engine returns a suggestion, THE System SHALL include the task details and a human-readable reason string explaining why the task was selected (e.g., "High priority + due today").
+IF no pending tasks exist for the requested date, THEN THE Suggestion_Engine SHALL return a response indicating no suggestion is available.
+Requirement 6: Workload Pressure Detection
+User Story: As an employee, I want the system to warn me when my daily workload exceeds a healthy limit, so that I can redistribute tasks and avoid burnout.
+
+Acceptance Criteria
+WHEN the Workload_Detector is invoked for a given date, THE Workload_Detector SHALL calculate the total assigned hours by summing the duration of all tasks (both pending and completed) for that date.
+WHEN the total assigned hours for a date exceed the Workload Threshold (8 hours), THE Workload_Detector SHALL return an overload status with the total hours and a list of actionable suggestions.
+THE Workload_Detector SHALL include the following suggestions when overload is detected:
+"Move low priority tasks to tomorrow."
+"Focus on the top 2 critical tasks."
+WHEN the total assigned hours are between 6 and 8 hours (inclusive), THE Workload_Detector SHALL return a moderate workload status.
+WHEN the total assigned hours are below 6 hours, THE Workload_Detector SHALL return a normal workload status.
+THE Workload_Detector SHALL include the count of overdue pending tasks in its response for any given date.
+Requirement 7: Automatic Daily Summary Report Generation
+User Story: As an employee, I want the system to automatically generate an end-of-day summary report, so that I can review my productivity without manually compiling data.
+
+Acceptance Criteria
+WHEN the Report_Generator is invoked for a given date, THE Report_Generator SHALL compile a report containing: the list of completed tasks with their durations, the list of pending tasks, the total productive hours (sum of completed task durations), and a smart summary text.
+THE Report_Generator SHALL generate the smart summary text using the following rules:
+IF all tasks for the day are completed, THEN the summary SHALL read: "Excellent work! All tasks completed today."
+IF the completion rate is 70% or above, THEN the summary SHALL read: "Good progress today. Focus on [pending task category or name] tomorrow."
+IF the completion rate is below 70%, THEN the summary SHALL read: "Several tasks remain. Prioritize pending items first thing tomorrow."
+IF no tasks exist for the day, THEN the summary SHALL read: "No tasks recorded for this day."
+WHEN the Report_Generator is invoked, THE Report_Generator SHALL calculate and include the total productive hours as the sum of durations of all completed tasks for that date.
+THE Report_Generator SHALL return the report as a structured JSON object suitable for rendering in the Daily Summary Page UI.
+Requirement 8: Dashboard Data Aggregation
+User Story: As an employee, I want a single dashboard view that shows today's tasks, my next suggested task, workload status, and a summary preview, so that I can get a complete picture of my day at a glance.
+
+Acceptance Criteria
+WHEN the Dashboard page loads, THE System SHALL fetch and display today's tasks, the next suggested task, the current workload status, and a preview of the daily summary — all in a single view.
+THE Dashboard SHALL display a workload progress bar reflecting the ratio of total assigned hours to the Workload Threshold (8 hours), capped visually at 100%.
+WHEN the workload status is overloaded, THE Dashboard SHALL display a visual alert with the overload message and suggestions.
+THE Dashboard SHALL include a Quick Add Task button that navigates the user to the Add Task page.
+WHEN today has no tasks, THE Dashboard SHALL display an empty state message encouraging the user to add their first task.
+Requirement 9: Insights and Productivity Analytics
+User Story: As an employee, I want to view productivity trends and workload patterns over time, so that I can understand my work habits and improve planning.
+
+Acceptance Criteria
+THE System SHALL calculate and display the completion rate (percentage of completed tasks out of total tasks) for each of the last 7 days.
+THE System SHALL display the average daily productive hours over the last 7 days.
+THE System SHALL identify and display the most frequently used technologies across all tasks in the last 7 days.
+THE System SHALL identify and display the most active client (by task count) over the last 7 days.
+WHEN no task data exists for the last 7 days, THE System SHALL display an empty state message on the Insights page.
+Requirement 10: Frontend UI and Navigation
+User Story: As an employee, I want a clean, fast, and visually appealing interface with smooth navigation between pages, so that using the system feels effortless and enjoyable.
+
+Acceptance Criteria
+THE System SHALL provide the following navigable pages: Dashboard, Add Task, Task List, Daily Summary, and Insights.
+THE System SHALL apply a light-mode-only theme using the defined color palette: white background (#ffffff), soft gray surfaces (#f5f7fb), blue accent (#3b82f6), green success (#22c55e), red warning (#ef4444), and purple highlight (#a855f7).
+THE System SHALL render all cards with glassmorphism styling (light blur, soft shadow, rounded corners of 12–16px).
+THE System SHALL apply smooth fade-in animations on card mount and hover lift effects on interactive cards.
+WHEN a user submits a form (e.g., Add Task), THE System SHALL display a loading state on the submit button until the operation completes.
+WHEN an API call fails, THE System SHALL display a user-friendly error message without crashing the page.
+THE System SHALL be responsive and usable on screen widths from 375px (mobile) to 1440px (desktop).

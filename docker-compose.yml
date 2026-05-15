@@ -1,0 +1,55 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: taskflow_ai
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+
+  backend:
+    build:
+      context: ./Backend of TA-MS
+      dockerfile: Dockerfile
+    depends_on:
+      - postgres
+    env_file:
+      - ./Backend of TA-MS/.env.example
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      FRONTEND_URL: http://localhost:3000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/taskflow_ai
+      JWT_SECRET: change-this-jwt-secret-to-at-least-32-characters
+      COOKIE_SECRET: change-this-cookie-secret
+      SEED_USER_NAME: TaskFlow Admin
+      SEED_USER_EMAIL: admin@example.com
+      SEED_USER_PASSWORD: ChangeMe123!
+    command: sh -c "npm run db:migrate && npm run db:seed && npm run start"
+    ports:
+      - '4000:4000'
+
+  frontend:
+    build:
+      context: ./FrontEnd TA-MS
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://backend:4000/api
+        NEXT_PUBLIC_SITE_URL: http://localhost:3000
+    depends_on:
+      - backend
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    ports:
+      - '3000:3000'
+
+volumes:
+  postgres-data:
