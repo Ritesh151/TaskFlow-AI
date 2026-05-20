@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { Plus, Search, Filter, X } from 'lucide-react';
@@ -9,9 +9,9 @@ import { TaskForm } from '@/components/tasks/TaskForm';
 import { Button } from '@/components/ui/Button';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import { Card, CardContent } from '@/components/ui/Card';
-import { getTasks, completeTask, deleteTask, updateTask } from '@/lib/api';
+import { useTasks, useCompleteTask, useDeleteTask, useUpdateTask } from '@/lib/hooks/use-tasks';
 import type { Task, TaskPriority, TaskStatus } from '@/lib/types';
-import { getTotalMinutesBetween } from '@/lib/taskTimeTracking';
+
 
 type FilterPriority = TaskPriority | 'all';
 type FilterStatus = TaskStatus | 'all';
@@ -28,147 +28,41 @@ function sortTasks(a: Task, b: Task): number {
 }
 
 export default function TaskListPage() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: tasks = [], isLoading, error } = useTasks();
+  const completeMutation = useCompleteTask();
+  const deleteMutation = useDeleteTask();
+  const updateMutation = useUpdateTask();
+
   const [search, setSearch] = useState('');
   const [filterPriority, setFilterPriority] = useState<FilterPriority>('all');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [listError, setListError] = useState('');
 
-  const replaceSortedTasks = useCallback((data: Task[]) => {
-    const copy = [...data];
-    copy.sort(sortTasks);
-    setTasks(copy);
-  }, []);
-
-  const loadTasks = useCallback(
-    async (opts?: { silent?: boolean }) => {
-      const silent = opts?.silent === true;
-      if (!silent) {
-        setLoading(true);
-        setListError('');
-      }
-      try {
-        const data = await getTasks();
-        replaceSortedTasks(data);
-      } catch (e: unknown) {
-        if (!silent) setListError(e instanceof Error ? e.message : 'Could not load tasks');
-      } finally {
-        if (!silent) setLoading(false);
-      }
-    },
-    [replaceSortedTasks],
-  );
-
-  useEffect(() => {
-    const id = window.setTimeout(() => {
-      void loadTasks();
-    }, 0);
-    return () => window.clearTimeout(id);
-  }, [loadTasks]);
-
-  /** Re-fetch periodically while tab is visible (same GET /tasks — no WebSocket dependency) */
-  useEffect(() => {
-    let intervalId: ReturnType<typeof setInterval> | undefined;
-    const sync = () => {
-      void loadTasks({ silent: true });
-    };
-    const onVis = () => {
-      if (document.visibilityState === 'visible') {
-        if (!intervalId) intervalId = setInterval(sync, 10_000);
-        sync();
-      } else if (intervalId) {
-        clearInterval(intervalId);
-        intervalId = undefined;
-      }
-    };
-    onVis();
-    document.addEventListener('visibilitychange', onVis);
-    return () => {
-      document.removeEventListener('visibilitychange', onVis);
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [loadTasks]);
-
   async function handleComplete(id: string) {
-    const stamp = new Date().toISOString();
-    const previous = [...tasks];
-    replaceSortedTasks(
-      tasks.map(t => {
-        if (t.taskId !== id) return t;
-        const endIso =
-          t.endTime != null
-            ? typeof t.endTime === 'string'
-              ? t.endTime
-              : t.endTime instanceof Date
-                ? t.endTime.toISOString()
-                : stamp
-            : stamp;
-        const startNorm =
-          typeof t.startTime === 'string'
-            ? t.startTime
-            : t.startTime instanceof Date
-              ? t.startTime.toISOString()
-              : undefined;
-        const totalTimeSpent = getTotalMinutesBetween(startNorm ?? null, endIso);
-        return {
-          ...t,
-          status: 'completed' as TaskStatus,
-          endTime: endIso,
-          totalTimeSpent: totalTimeSpent != null ? totalTimeSpent : null,
-          isTimeTracked: Boolean(startNorm ?? endIso),
-        };
-      })
-    );
     try {
-      const updated = await completeTask(id);
-      setTasks(curr => {
-        const next = curr.map(t => (t.taskId === id ? updated : t));
-        next.sort(sortTasks);
-        return next;
-      });
+      await completeMutation.mutateAsync(id);
     } catch {
-      replaceSortedTasks(previous);
       setListError('Could not mark task complete.');
     }
   }
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this task?')) return;
-    const prev = [...tasks];
-    replaceSortedTasks(tasks.filter(t => t.taskId !== id));
     try {
-      await deleteTask(id);
+      await deleteMutation.mutateAsync(id);
     } catch {
-      replaceSortedTasks(prev);
       setListError('Could not delete task.');
     }
   }
 
   async function handleEdit(data: Omit<Task, 'taskId' | 'createdAt'>) {
     if (!editingTask) return;
-    const editorRef = editingTask;
-    const id = editorRef.taskId;
-    const optimistic: Task = {
-      ...editorRef,
-      ...data,
-      taskId: id,
-      createdAt: editorRef.createdAt,
-    };
-    const prevSnap = [...tasks];
-    replaceSortedTasks(tasks.map(t => (t.taskId === id ? optimistic : t)));
-    setEditingTask(null);
+    const id = editingTask.taskId;
     try {
-      const refreshed = await updateTask(id, data);
-      setTasks(curr => {
-        const next = curr.map(t => (t.taskId === id ? refreshed : t));
-        next.sort(sortTasks);
-        return next;
-      });
+      await updateMutation.mutateAsync({ id, data });
+      setEditingTask(null);
     } catch {
-      replaceSortedTasks(prevSnap);
-      setEditingTask(editorRef);
       setListError('Could not update task.');
     }
   }
@@ -180,7 +74,7 @@ export default function TaskListPage() {
     const matchPriority = filterPriority === 'all' || t.priority === filterPriority;
     const matchStatus = filterStatus === 'all' || t.status === filterStatus;
     return matchSearch && matchPriority && matchStatus;
-  });
+  }).sort(sortTasks);
 
   const pendingCount = tasks.filter(t => t.status === 'pending').length;
   const inProgressCount = tasks.filter(t => t.status === 'in_progress').length;
@@ -198,17 +92,16 @@ export default function TaskListPage() {
         </Link>
       }
     >
-      {listError && (
+      {(listError || error) && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600"
         >
-          {listError}
+          {listError || (error instanceof Error ? error.message : 'Could not load tasks')}
         </motion.div>
       )}
 
-      {/* Edit Modal */}
       <AnimatePresence>
         {editingTask && (
           <motion.div
@@ -244,11 +137,9 @@ export default function TaskListPage() {
         )}
       </AnimatePresence>
 
-      {/* Filters */}
       <Card className="mb-6">
         <CardContent className="pt-4 pb-4">
           <div className="flex flex-wrap items-center gap-3">
-            {/* Search */}
             <div className="relative flex-1 min-w-48">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
@@ -260,7 +151,6 @@ export default function TaskListPage() {
               />
             </div>
 
-            {/* Priority filter */}
             <div className="flex items-center gap-1.5 flex-wrap">
               <Filter className="w-4 h-4 text-gray-400" />
               {(['all', 'high', 'medium', 'low'] as FilterPriority[]).map(p => (
@@ -279,7 +169,6 @@ export default function TaskListPage() {
               ))}
             </div>
 
-            {/* Status filter */}
             <div className="flex items-center gap-1.5 flex-wrap">
               {(['all', 'pending', 'in_progress', 'completed'] as FilterStatus[]).map(s => (
                 <button
@@ -304,8 +193,7 @@ export default function TaskListPage() {
         </CardContent>
       </Card>
 
-      {/* Task List */}
-      {loading ? (
+      {isLoading ? (
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => (
             <SkeletonCard key={i} />

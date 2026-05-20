@@ -9,22 +9,45 @@ function canUseStorage() {
   return typeof window !== 'undefined';
 }
 
+// Cache the parsed snapshot so that getSnapshot in useSyncExternalStore
+// returns a stable object reference when the underlying data hasn't changed.
+// Without this, every call to readSessionSnapshot() creates a new object via
+// JSON.parse, which React's useSyncExternalStore detects as a different value
+// (by Object.is comparison), triggering an infinite re-render loop.
+let cachedRaw: string | null = null;
+let cachedSnapshot: AuthSession | null = null;
+
 export function readSessionSnapshot(): AuthSession | null {
   if (!canUseStorage()) {
     return null;
   }
 
   const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
+  if (raw === cachedRaw) {
+    return cachedSnapshot;
+  }
+
+  cachedRaw = raw;
+
   if (!raw) {
+    cachedSnapshot = null;
     return null;
   }
 
   try {
-    return JSON.parse(raw) as AuthSession;
+    cachedSnapshot = JSON.parse(raw) as AuthSession;
+    return cachedSnapshot;
   } catch {
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
+    cachedRaw = null;
+    cachedSnapshot = null;
     return null;
   }
+}
+
+export function invalidateSessionCache() {
+  cachedRaw = null;
+  cachedSnapshot = null;
 }
 
 function emitSessionEvent() {
@@ -41,6 +64,7 @@ export function writeSessionSnapshot(session: AuthSession) {
   }
 
   window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  invalidateSessionCache();
   emitSessionEvent();
 }
 
@@ -50,6 +74,7 @@ export function clearSessionSnapshot() {
   }
 
   window.localStorage.removeItem(SESSION_STORAGE_KEY);
+  invalidateSessionCache();
   emitSessionEvent();
 }
 

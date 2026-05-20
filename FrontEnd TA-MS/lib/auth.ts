@@ -52,17 +52,31 @@ export function getSessionUser(): ApiUser | null {
   return readSessionSnapshot()?.user ?? null;
 }
 
-export async function syncSession(): Promise<AuthSession> {
-  try {
-    const session = await authApi.me();
-    writeSessionSnapshot(session);
-    return session;
-  } catch (error) {
-    if (error instanceof ApiError && error.status === 401) {
-      clearSessionSnapshot();
-      throw error;
-    }
+// Deduplicate concurrent syncSession calls so rapid mount + visibility change
+// only trigger a single /auth/me request.
+let syncPromise: Promise<AuthSession> | null = null;
 
-    throw error instanceof ApiError ? error : new ApiError('Unable to verify your session.', 0);
+export async function syncSession(): Promise<AuthSession> {
+  if (syncPromise) {
+    return syncPromise;
   }
+
+  syncPromise = (async () => {
+    try {
+      const session = await authApi.me();
+      writeSessionSnapshot(session);
+      return session;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        clearSessionSnapshot();
+        throw error;
+      }
+
+      throw error instanceof ApiError ? error : new ApiError('Unable to verify your session.', 0);
+    } finally {
+      syncPromise = null;
+    }
+  })();
+
+  return syncPromise;
 }

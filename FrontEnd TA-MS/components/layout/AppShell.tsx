@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Menu, Zap } from 'lucide-react';
 import { Sidebar } from './Sidebar';
@@ -10,13 +10,13 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
-// Routes that should NOT show the sidebar or run the session guard
 const NO_SIDEBAR_PATHS = ['/login'];
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const prevPathname = useRef(pathname);
   const isPublicPage = NO_SIDEBAR_PATHS.includes(pathname);
   const { ready, session, signOut, sync } = useSession();
 
@@ -74,10 +74,10 @@ export function AppShell({ children }: AppShellProps) {
   }, [isPublicPage, ready, router, session?.refreshTokenExpiresAt, signOut]);
 
   useEffect(() => {
-    const id = window.setTimeout(() => {
+    if (prevPathname.current !== pathname) {
       setMobileOpen(false);
-    }, 0);
-    return () => window.clearTimeout(id);
+      prevPathname.current = pathname;
+    }
   }, [pathname]);
 
   const showSidebar = !isPublicPage;

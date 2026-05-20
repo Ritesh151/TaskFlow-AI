@@ -6,6 +6,9 @@ const externalApiBase = rawApiUrl && /^https?:\/\//.test(rawApiUrl)
   : null;
 
 const nextConfig: NextConfig = {
+  // Allow HMR connections from LAN IPs (e.g., mobile devices testing on same network).
+  // Without this, Next.js 16 blocks cross-origin WebSocket connections to /_next/webpack-hmr.
+  allowedDevOrigins: ['10.118.227.119'],
   reactStrictMode: true,
   compress: true,
   poweredByHeader: false,

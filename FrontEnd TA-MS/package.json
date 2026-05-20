@@ -11,6 +11,7 @@
     "test": "npm run lint && npm run typecheck"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.100.11",
     "@types/react-syntax-highlighter": "^15.5.13",
     "axios": "^1.9.0",
     "framer-motion": "^12.38.0",
@@ -19,8 +20,8 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-force-graph-2d": "^1.29.1",
-    "react-markdown": "^10.1.0",
     "react-hot-toast": "^2.5.2",
+    "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.1"
   },
   "devDependencies": {

@@ -1,31 +1,32 @@
-version: '3.9'
-
 services:
-  postgres:
-    image: postgres:16-alpine
+  mongodb:
+    image: mongo:7
     restart: unless-stopped
-    environment:
-      POSTGRES_DB: taskflow_ai
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
+    command: ["--replSet", "rs0", "--bind_ip_all"]
     ports:
-      - '5432:5432'
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test: mongosh --quiet --eval "try { rs.status().ok } catch(e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongodb:27017' }] }).ok }" | grep -q 1
+      interval: 10s
+      start_period: 30s
+      retries: 10
 
   backend:
     build:
       context: ./Backend of TA-MS
       dockerfile: Dockerfile
     depends_on:
-      - postgres
+      mongodb:
+        condition: service_healthy
     env_file:
       - ./Backend of TA-MS/.env.example
     environment:
       NODE_ENV: development
       PORT: 4000
       FRONTEND_URL: http://localhost:3000
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/taskflow_ai
+      DATABASE_URL: mongodb://mongodb:27017/taskflow_ai?replicaSet=rs0
       JWT_SECRET: change-this-jwt-secret-to-at-least-32-characters
       COOKIE_SECRET: change-this-cookie-secret
       SEED_USER_NAME: TaskFlow Admin
@@ -33,7 +34,7 @@ services:
       SEED_USER_PASSWORD: ChangeMe123!
     command: sh -c "npm run db:migrate && npm run db:seed && npm run start"
     ports:
-      - '4000:4000'
+      - "4000:4000"
 
   frontend:
     build:
@@ -49,7 +50,7 @@ services:
       PORT: 3000
       HOSTNAME: 0.0.0.0
     ports:
-      - '3000:3000'
+      - "3000:3000"
 
 volumes:
-  postgres-data:
+  mongodb-data:

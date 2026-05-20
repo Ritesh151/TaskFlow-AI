@@ -6,9 +6,6 @@ import { Eye, EyeOff, Mail, Lock, Zap, AlertCircle, ArrowRight } from 'lucide-re
 import { cn } from '@/lib/utils';
 import { useSession } from '@/components/providers/SessionProvider';
 
-// ---------------------------------------------------------------------------
-// Animation variants
-// ---------------------------------------------------------------------------
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
@@ -28,9 +25,6 @@ const errorVariants = {
   exit: { opacity: 0, y: -4, scale: 0.97, transition: { duration: 0.15 } },
 };
 
-// ---------------------------------------------------------------------------
-// Input field sub-component
-// ---------------------------------------------------------------------------
 interface InputFieldProps {
   id: string;
   label: string;
@@ -40,7 +34,6 @@ interface InputFieldProps {
   placeholder: string;
   icon: React.ReactNode;
   error?: string;
-  /** Pass an inputRef instead of autoFocus to avoid SSR/client mismatch */
   inputRef?: React.RefObject<HTMLInputElement | null>;
   autoComplete?: string;
   rightElement?: React.ReactNode;
@@ -70,25 +63,10 @@ function InputField({
         {label}
       </label>
       <div className="relative">
-        {/* Left icon */}
         <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
           {icon}
         </span>
 
-        {/*
-         * suppressHydrationWarning is required here for two reasons:
-         *
-         * 1. Browser extensions (e.g. temp-mail, password managers) inject
-         *    extra attributes like `data-temp-mail-org` and inline
-         *    `background-image` styles into <input> elements before React
-         *    hydrates. React sees a mismatch between the server-rendered HTML
-         *    and the DOM and logs a hydration error. suppressHydrationWarning
-         *    tells React to accept the DOM as-is for this element.
-         *
-         * 2. autoFocus is intentionally NOT passed as a prop — it is applied
-         *    imperatively via a ref in useEffect (client-only) so the server
-         *    and client render identical HTML.
-         */}
         <input
           ref={inputRef}
           id={id}
@@ -112,13 +90,11 @@ function InputField({
           )}
         />
 
-        {/* Right element (show/hide toggle) */}
         {rightElement && (
           <span className="absolute right-3.5 top-1/2 -translate-y-1/2">{rightElement}</span>
         )}
       </div>
 
-      {/* Inline field error */}
       <AnimatePresence mode="wait">
         {error && (
           <motion.p
@@ -140,9 +116,6 @@ function InputField({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main LoginForm
-// ---------------------------------------------------------------------------
 export function LoginForm() {
   const router = useRouter();
   const { isAuthenticated, signIn } = useSession();
@@ -154,7 +127,6 @@ export function LoginForm() {
   const [globalError, setGlobalError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
 
-  // Ref-based focus: applied after hydration so server/client HTML is identical
   const emailRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     emailRef.current?.focus();
@@ -165,14 +137,6 @@ export function LoginForm() {
       router.replace('/');
     }
   }, [isAuthenticated, router]);
-
-  // Clear global error when user starts typing
-  useEffect(() => {
-    const id = window.setTimeout(() => {
-      setGlobalError('');
-    }, 0);
-    return () => window.clearTimeout(id);
-  }, [email, password]);
 
   function validate(): boolean {
     const errors: { email?: string; password?: string } = {};
@@ -190,7 +154,6 @@ export function LoginForm() {
     setGlobalError('');
     setFieldErrors({});
 
-    // Small artificial delay so the spinner is visible and the UX feels deliberate
     await new Promise<void>((resolve) => setTimeout(resolve, 600));
 
     const result = await signIn(email, password);
@@ -211,10 +174,8 @@ export function LoginForm() {
       animate="visible"
       className="w-full max-w-md"
     >
-      {/* ── Card ── */}
       <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-gray-100 shadow-xl shadow-gray-200/60 px-8 py-10">
 
-        {/* Logo + heading */}
         <motion.div variants={itemVariants} className="flex flex-col items-center mb-8">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-300/40 mb-4">
             <Zap className="w-7 h-7 text-white" />
@@ -225,7 +186,6 @@ export function LoginForm() {
           </p>
         </motion.div>
 
-        {/* Global error banner */}
         <AnimatePresence mode="wait">
           {globalError && (
             <motion.div
@@ -243,15 +203,13 @@ export function LoginForm() {
           )}
         </AnimatePresence>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} noValidate className="space-y-5">
-          {/* Email */}
           <InputField
             id="email"
             label="Email address"
             type="email"
             value={email}
-            onChange={setEmail}
+            onChange={(v) => { setEmail(v); if (globalError) setGlobalError(''); }}
             placeholder="you@example.com"
             icon={<Mail className="w-4 h-4" />}
             error={fieldErrors.email}
@@ -260,13 +218,12 @@ export function LoginForm() {
             disabled={loading}
           />
 
-          {/* Password */}
           <InputField
             id="password"
             label="Password"
             type={showPassword ? 'text' : 'password'}
             value={password}
-            onChange={setPassword}
+            onChange={(v) => { setPassword(v); if (globalError) setGlobalError(''); }}
             placeholder="Enter your password"
             icon={<Lock className="w-4 h-4" />}
             error={fieldErrors.password}
@@ -289,7 +246,6 @@ export function LoginForm() {
             }
           />
 
-          {/* Submit button */}
           <motion.div variants={itemVariants} className="pt-1">
             <motion.button
               type="submit"
@@ -321,7 +277,6 @@ export function LoginForm() {
         </form>
       </div>
 
-      {/* Footer note */}
       <motion.p
         variants={itemVariants}
         className="text-center text-xs text-gray-400 mt-6"

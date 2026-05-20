@@ -1,39 +1,15 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { BarChart3, TrendingUp, Target, AlertCircle, Code2 } from 'lucide-react';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { SkeletonCard } from '@/components/ui/Skeleton';
-import { getInsights } from '@/lib/api';
-import type { Insights } from '@/lib/types';
+import { useInsights } from '@/lib/hooks/use-intelligence';
 import { formatDate, formatHours } from '@/lib/utils';
 
 export default function InsightsPage() {
-  const [insights, setInsights] = useState<Insights | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  const loadInsights = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const data = await getInsights();
-      setInsights(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load insights.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const id = window.setTimeout(() => {
-      void loadInsights();
-    }, 0);
-    return () => window.clearTimeout(id);
-  }, [loadInsights]);
+  const { data: insights, isLoading, error } = useInsights();
 
   return (
     <PageWrapper
@@ -42,11 +18,11 @@ export default function InsightsPage() {
     >
       {error && (
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-          {error}
+          {error instanceof Error ? error.message : 'Could not load insights.'}
         </div>
       )}
 
-      {loading ? (
+      {isLoading ? (
         <div className="space-y-4">
           {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
         </div>
@@ -54,37 +30,12 @@ export default function InsightsPage() {
         <p className="text-gray-400 text-sm">No data available.</p>
       ) : (
         <div className="space-y-6">
-          {/* Overview Stats */}
           <div className="grid grid-cols-4 gap-4">
             {[
-              {
-                label: 'Total Tasks',
-                value: insights.totalTasks,
-                icon: Target,
-                color: 'text-blue-500',
-                bg: 'bg-blue-50',
-              },
-              {
-                label: 'Completed',
-                value: insights.completedTasks,
-                icon: TrendingUp,
-                color: 'text-green-500',
-                bg: 'bg-green-50',
-              },
-              {
-                label: 'Overdue',
-                value: insights.overdueTasks,
-                icon: AlertCircle,
-                color: insights.overdueTasks > 0 ? 'text-red-500' : 'text-gray-400',
-                bg: insights.overdueTasks > 0 ? 'bg-red-50' : 'bg-gray-50',
-              },
-              {
-                label: 'Completion Rate',
-                value: `${insights.overallCompletionRate}%`,
-                icon: BarChart3,
-                color: 'text-purple-500',
-                bg: 'bg-purple-50',
-              },
+              { label: 'Total Tasks', value: insights.totalTasks, icon: Target, color: 'text-blue-500', bg: 'bg-blue-50' },
+              { label: 'Completed', value: insights.completedTasks, icon: TrendingUp, color: 'text-green-500', bg: 'bg-green-50' },
+              { label: 'Overdue', value: insights.overdueTasks, icon: AlertCircle, color: insights.overdueTasks > 0 ? 'text-red-500' : 'text-gray-400', bg: insights.overdueTasks > 0 ? 'bg-red-50' : 'bg-gray-50' },
+              { label: 'Completion Rate', value: `${insights.overallCompletionRate}%`, icon: BarChart3, color: 'text-purple-500', bg: 'bg-purple-50' },
             ].map((stat, i) => (
               <motion.div
                 key={stat.label}
@@ -104,7 +55,6 @@ export default function InsightsPage() {
             ))}
           </div>
 
-          {/* Weekly Chart */}
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
@@ -128,20 +78,16 @@ export default function InsightsPage() {
                       <span className="text-xs text-gray-500 w-20 flex-shrink-0">{formatDate(day.date)}</span>
                       <div className="flex-1">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-gray-400">
-                            {day.completed}/{day.total} tasks · {formatHours(day.hours)}
-                          </span>
+                          <span className="text-xs text-gray-400">{day.completed}/{day.total} tasks · {formatHours(day.hours)}</span>
                           <span className="text-xs font-medium text-gray-600">{completionPct}%</span>
                         </div>
                         <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
-                          {/* Total hours bar */}
                           <motion.div
                             initial={{ width: 0 }}
                             animate={{ width: `${(day.hours / maxHours) * 100}%` }}
                             transition={{ duration: 0.6, delay: i * 0.06 }}
                             className="absolute inset-y-0 left-0 bg-blue-100 rounded-full"
                           />
-                          {/* Completed hours bar */}
                           <motion.div
                             initial={{ width: 0 }}
                             animate={{ width: `${(day.completedHours / maxHours) * 100}%` }}
@@ -167,9 +113,7 @@ export default function InsightsPage() {
             </CardContent>
           </Card>
 
-          {/* Priority Breakdown + Technologies */}
           <div className="grid grid-cols-2 gap-6">
-            {/* Priority Breakdown */}
             <Card>
               <CardHeader>
                 <h3 className="text-sm font-semibold text-gray-800">Pending by Priority</h3>
@@ -179,11 +123,11 @@ export default function InsightsPage() {
                   <p className="text-sm text-gray-400">No pending tasks.</p>
                 ) : (
                   <div className="space-y-4">
-                    {[
+                    {([
                       { key: 'high', label: 'High Priority', color: 'red' as const, textColor: 'text-red-600' },
                       { key: 'medium', label: 'Medium Priority', color: 'amber' as const, textColor: 'text-amber-600' },
                       { key: 'low', label: 'Low Priority', color: 'green' as const, textColor: 'text-green-600' },
-                    ].map(({ key, label, color, textColor }) => {
+                    ] as const).map(({ key, label, color, textColor }) => {
                       const count = insights.priorityBreakdown[key as keyof typeof insights.priorityBreakdown];
                       const total = Object.values(insights.priorityBreakdown).reduce((a, b) => a + b, 0);
                       const pct = total > 0 ? Math.round((count / total) * 100) : 0;
@@ -202,7 +146,6 @@ export default function InsightsPage() {
               </CardContent>
             </Card>
 
-            {/* Top Technologies */}
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
@@ -227,11 +170,7 @@ export default function InsightsPage() {
                         >
                           <span className="text-xs font-medium text-gray-700 w-24 truncate">{tech.name}</span>
                           <div className="flex-1">
-                            <ProgressBar
-                              value={(tech.count / maxCount) * 100}
-                              color="purple"
-                              height="sm"
-                            />
+                            <ProgressBar value={(tech.count / maxCount) * 100} color="purple" height="sm" />
                           </div>
                           <span className="text-xs text-gray-400 w-8 text-right">{tech.count}</span>
                         </motion.div>
@@ -243,7 +182,6 @@ export default function InsightsPage() {
             </Card>
           </div>
 
-          {/* Overall Completion */}
           <Card>
             <CardHeader>
               <h3 className="text-sm font-semibold text-gray-800">Overall Completion Rate</h3>
@@ -283,9 +221,7 @@ export default function InsightsPage() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-600">Overdue Tasks</span>
-                    <span className={`text-sm font-semibold ${insights.overdueTasks > 0 ? 'text-red-500' : 'text-gray-400'}`}>
-                      {insights.overdueTasks}
-                    </span>
+                    <span className={`text-sm font-semibold ${insights.overdueTasks > 0 ? 'text-red-500' : 'text-gray-400'}`}>{insights.overdueTasks}</span>
                   </div>
                 </div>
               </div>

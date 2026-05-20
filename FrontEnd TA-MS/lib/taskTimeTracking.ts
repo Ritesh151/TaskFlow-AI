@@ -119,6 +119,7 @@ export function getTimeTrackingDisplayLabel(task: Task): string {
   return 'Not Tracked';
 }
 
+
 /** Status badge keyed by effective time-tracking state when possible */
 export function deriveTimeTrackingBadge(task: Task): { label: string; tone: 'completed' | 'progress' | 'pending' } {
   const hasStart = Boolean(task.startTime);

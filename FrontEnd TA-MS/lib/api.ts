@@ -47,7 +47,7 @@ declare module 'axios' {
   }
 }
 
-const REQUEST_TIMEOUT_MS = 15_000;
+const REQUEST_TIMEOUT_MS = 60_000;
 const BROWSER_API_BASE_URL = '/api';
 
 function normalizeUrl(value: string) {

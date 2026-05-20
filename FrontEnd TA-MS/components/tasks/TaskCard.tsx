@@ -43,6 +43,13 @@ export function TaskCard({ task, onComplete, onDelete, onEdit, compact = false }
     calculateDuration(task.startTime, task.endTime) ??
     (task.totalTimeSpent != null ? formatTimeSpent(task.totalTimeSpent) : null);
   const outsideHours = shouldWarnOutsideWorkHours(task);
+  const completedTime = isCompleted && task.endTime
+    ? typeof task.endTime === 'string'
+      ? task.endTime
+      : task.endTime instanceof Date
+        ? task.endTime.toISOString()
+        : null
+    : null;
 
   return (
     <motion.div
@@ -98,11 +105,16 @@ export function TaskCard({ task, onComplete, onDelete, onEdit, compact = false }
               )}
             >
               {trackingBadge.tone === 'completed'
-                ? '🟢 Completed'
+                ? `✅ Completed${completedTime ? ` at ${formatDateTime(completedTime)}` : ''}`
                 : trackingBadge.tone === 'progress'
                   ? '🟡 In Progress'
                   : '⚪ Pending'}
             </Badge>
+            {isCompleted && completedTime && (
+              <span className="text-[10px] text-gray-400 whitespace-nowrap">
+                {new Date(completedTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
             {outsideHours && (
               <Badge className="bg-amber-50 text-amber-800 border-amber-200">⚠ Task outside work hours</Badge>
             )}
@@ -162,32 +174,41 @@ export function TaskCard({ task, onComplete, onDelete, onEdit, compact = false }
         )}
       </div>
 
-      {(onEdit || onDelete) && (
-        <div className="flex items-center gap-1 flex-shrink-0 self-end sm:self-start">
-          {onEdit && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onEdit(task)}
-              className="p-1.5 text-gray-400 hover:text-blue-500"
-              aria-label="Edit task"
-            >
-              <Edit2 className="w-3.5 h-3.5" />
-            </Button>
-          )}
-          {onDelete && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onDelete(task.taskId)}
-              className="p-1.5 text-gray-400 hover:text-red-500"
-              aria-label="Delete task"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </Button>
-          )}
-        </div>
-      )}
+      <div className="flex items-center gap-1 flex-shrink-0 self-end sm:self-start">
+        {!isCompleted && onComplete && (
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => onComplete(task.taskId)}
+            className="px-3 py-1.5 text-xs font-semibold bg-green-500 hover:bg-green-600 text-white shadow-sm border-0"
+            aria-label="Mark complete"
+          >
+            Complete
+          </Button>
+        )}
+        {onEdit && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onEdit(task)}
+            className="p-1.5 text-gray-400 hover:text-blue-500"
+            aria-label="Edit task"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+          </Button>
+        )}
+        {onDelete && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onDelete(task.taskId)}
+            className="p-1.5 text-gray-400 hover:text-red-500"
+            aria-label="Delete task"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+        )}
+      </div>
     </motion.div>
   );
 }

@@ -3,6 +3,7 @@
 import {
   createContext,
   useContext,
+  useCallback,
   useMemo,
   useSyncExternalStore,
   type ReactNode,
@@ -23,22 +24,33 @@ type SessionContextValue = {
 const SessionContext = createContext<SessionContextValue | null>(null);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const session = useSyncExternalStore(subscribeToSessionSnapshot, readSessionSnapshot, () => null);
+  // Memoize getSnapshot to ensure useSyncExternalStore gets a stable function ref
+  const getSnapshot = useCallback(() => readSessionSnapshot(), []);
+
+  const session = useSyncExternalStore(subscribeToSessionSnapshot, getSnapshot, () => null);
+
+  // Stable callback refs — these don't depend on `session`, so they never change,
+  // preventing downstream effects from re-running unnecessarily.
+  const signIn = useCallback(async (email: string, password: string) => {
+    return login(email, password);
+  }, []);
+
+  const signOut = useCallback(async () => {
+    await logout();
+  }, []);
+
+  const sync = useCallback(() => syncSession(), []);
 
   const value = useMemo<SessionContextValue>(
     () => ({
       session,
       ready: true,
       isAuthenticated: Boolean(session),
-      signIn: async (email: string, password: string) => {
-        return login(email, password);
-      },
-      signOut: async () => {
-        await logout();
-      },
-      sync: () => syncSession(),
+      signIn,
+      signOut,
+      sync,
     }),
-    [session],
+    [session, signIn, signOut, sync],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

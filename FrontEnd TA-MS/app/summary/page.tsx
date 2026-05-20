@@ -1,41 +1,18 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { CheckCircle2, Clock, FileText, Sparkles, Calendar } from 'lucide-react';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { SkeletonCard } from '@/components/ui/Skeleton';
-import { getDailySummary } from '@/lib/api';
-import type { DailySummary } from '@/lib/types';
+import { useDailySummary } from '@/lib/hooks/use-intelligence';
 import { todayStr, formatDate, formatHours, priorityBg } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
 
 export default function SummaryPage() {
-  const [summary, setSummary] = useState<DailySummary | null>(null);
   const [selectedDate, setSelectedDate] = useState(todayStr());
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  const loadSummary = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const data = await getDailySummary(selectedDate);
-      setSummary(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load the summary.');
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedDate]);
-
-  useEffect(() => {
-    const id = window.setTimeout(() => {
-      void loadSummary();
-    }, 0);
-    return () => window.clearTimeout(id);
-  }, [loadSummary]);
+  const { data: summary, isLoading, error } = useDailySummary(selectedDate);
 
   return (
     <PageWrapper
@@ -55,11 +32,11 @@ export default function SummaryPage() {
     >
       {error && (
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-          {error}
+          {error instanceof Error ? error.message : 'Could not load the summary.'}
         </div>
       )}
 
-      {loading ? (
+      {isLoading ? (
         <div className="space-y-4">
           {[...Array(3)].map((_, i) => <SkeletonCard key={i} />)}
         </div>
@@ -67,7 +44,6 @@ export default function SummaryPage() {
         <p className="text-gray-400 text-sm">No data available.</p>
       ) : (
         <div className="space-y-6">
-          {/* Header Banner */}
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -81,7 +57,6 @@ export default function SummaryPage() {
             <p className="text-blue-100 text-sm mt-1">Generated at {new Date(summary.generatedAt).toLocaleTimeString()}</p>
           </motion.div>
 
-          {/* Stats Grid */}
           <div className="grid grid-cols-4 gap-4">
             {[
               { label: 'Total Tasks', value: summary.completed.length + summary.pending.length, color: 'text-gray-800', bg: 'bg-gray-50' },
@@ -102,7 +77,6 @@ export default function SummaryPage() {
             ))}
           </div>
 
-          {/* Completion Progress */}
           <Card>
             <CardHeader>
               <h3 className="text-sm font-semibold text-gray-800">Completion Rate</h3>
@@ -120,7 +94,6 @@ export default function SummaryPage() {
             </CardContent>
           </Card>
 
-          {/* Smart Summary */}
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
@@ -135,7 +108,6 @@ export default function SummaryPage() {
             </CardContent>
           </Card>
 
-          {/* Completed Tasks */}
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
@@ -175,7 +147,6 @@ export default function SummaryPage() {
             </CardContent>
           </Card>
 
-          {/* Pending Tasks */}
           {summary.pending.length > 0 && (
             <Card>
               <CardHeader>
@@ -213,7 +184,6 @@ export default function SummaryPage() {
             </Card>
           )}
 
-          {/* Time Summary */}
           <Card>
             <CardHeader>
               <h3 className="text-sm font-semibold text-gray-800">⏱ Time Summary</h3>

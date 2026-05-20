@@ -1,8 +1,7 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
-import { Plus, RefreshCw, Calendar, Zap } from 'lucide-react';
+import { Plus, Calendar, Zap } from 'lucide-react';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { NextTaskCard } from '@/components/dashboard/NextTaskCard';
 import { WorkloadCard } from '@/components/dashboard/WorkloadCard';
@@ -11,60 +10,30 @@ import { TaskCard } from '@/components/tasks/TaskCard';
 import { Button } from '@/components/ui/Button';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
-import {
-  getTasks,
-  getNextBestTask,
-  getWorkload,
-  getDailySummary,
-  completeTask,
-} from '@/lib/api';
-import type { Task, NextBestTask, WorkloadAnalysis, DailySummary } from '@/lib/types';
+import { useTasks, useCompleteTask } from '@/lib/hooks/use-tasks';
+import { useNextBestTask, useWorkload, useDailySummary } from '@/lib/hooks/use-intelligence';
 import { todayStr, formatDate } from '@/lib/utils';
 
 export default function DashboardPage() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [nextTask, setNextTask] = useState<NextBestTask | null>(null);
-  const [workload, setWorkload] = useState<WorkloadAnalysis | null>(null);
-  const [summary, setSummary] = useState<DailySummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
   const today = todayStr();
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const [allTasks, next, wl, sum] = await Promise.all([
-        getTasks(),
-        getNextBestTask(),
-        getWorkload(today),
-        getDailySummary(today),
-      ]);
-      setTasks(allTasks.filter(t => t.date === today));
-      setNextTask(next);
-      setWorkload(wl);
-      setSummary(sum);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Could not load your workspace right now.');
-    } finally {
-      setLoading(false);
-    }
-  }, [today]);
+  const { data: tasks = [], isLoading: tasksLoading } = useTasks();
+  const { data: nextTask, isLoading: nextTaskLoading } = useNextBestTask();
+  const { data: workload, isLoading: workloadLoading } = useWorkload(today);
+  const { data: summary, isLoading: summaryLoading } = useDailySummary(today);
+  const completeMutation = useCompleteTask();
 
-  useEffect(() => {
-    const id = window.setTimeout(() => {
-      void loadData();
-    }, 0);
-    return () => window.clearTimeout(id);
-  }, [loadData]);
+  const loading = tasksLoading || nextTaskLoading || workloadLoading || summaryLoading;
 
   async function handleComplete(id: string) {
-    await completeTask(id);
-    loadData();
+    try {
+      await completeMutation.mutateAsync(id);
+    } catch {
+      /* error handled by mutation onError */
+    }
   }
 
-  const todayTasks = tasks;
+  const todayTasks = tasks.filter(t => t.date === today);
 
   return (
     <PageWrapper
@@ -72,9 +41,6 @@ export default function DashboardPage() {
       subtitle={`${formatDate(today)} — Your AI productivity assistant`}
       action={
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={loadData} icon={<RefreshCw className="w-4 h-4" />}>
-            Refresh
-          </Button>
           <Link href="/tasks/add">
             <Button variant="primary" size="sm" icon={<Plus className="w-4 h-4" />}>
               Add Task
@@ -83,16 +49,6 @@ export default function DashboardPage() {
         </div>
       }
     >
-      {error && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="mb-6 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600"
-        >
-          ⚠️ {error}
-        </motion.div>
-      )}
-
       {loading ? (
         <div className="space-y-6">
           <div className="grid grid-cols-4 gap-4">
@@ -105,19 +61,14 @@ export default function DashboardPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Stats Row */}
           {workload && (
             <StatsRow workload={workload} productivityScore={summary?.productivityScore} />
           )}
 
-          {/* Main Grid */}
           <div className="grid grid-cols-3 gap-6">
-            {/* Left: Next Task + Today's Tasks */}
             <div className="col-span-2 space-y-6">
-              {/* Next Best Task */}
-              <NextTaskCard data={nextTask} onComplete={handleComplete} />
+              <NextTaskCard data={nextTask ?? null} onComplete={handleComplete} />
 
-              {/* Today's Tasks */}
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
@@ -162,11 +113,9 @@ export default function DashboardPage() {
               </Card>
             </div>
 
-            {/* Right: Workload + Summary Preview */}
             <div className="space-y-6">
               {workload && <WorkloadCard data={workload} />}
 
-              {/* Summary Preview */}
               {summary && (
                 <Card>
                   <CardHeader>
